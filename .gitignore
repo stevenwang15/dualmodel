@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Model download cache (not trained models)
+*.pth
+*.bin
+*.safetensors
+*.gguf
+
+# Cache directories
+.huggingface/
+.cache/
+
+# API keys
+.env
+*.env.local
+
+# Build artifacts
+*.app/
+*.dmg
+*.msi
+*.exe
+*.icns
+*.ico
