@@ -28,14 +28,15 @@ User Input
 ### 1. Install
 
 ```bash
-git clone <repo-url>
+# Method 1: pip install (recommended for beginners)
+pip install dualmodel                # core
+pip install "dualmodel[all]"         # full features (train + api)
+pip install "dualmodel[tray]"        # with system tray
+
+# Method 2: git clone (for developers)
+git clone https://github.com/stevenwang15/dualmodel.git
 cd dualmodel
-
-# Recommended
-pip install -e .
-
-# Or just core dependencies
-pip install -r requirements.txt
+pip install -e .                     # editable install
 ```
 
 ### 2. Set API Key
