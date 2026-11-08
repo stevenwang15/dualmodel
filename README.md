@@ -146,6 +146,7 @@ dualmodel/
 ├── __main__.py          # CLI entry: python -m dualmodel
 ├── api_server.py        # OpenAI-compatible API server + Web UI
 ├── config.py            # Configuration (env vars, dataclass)
+├── routing.py           # Rule-based routing — pure, no torch
 ├── gate.py              # Gate router
 ├── interrupter.py       # Interrupter monitor
 ├── pipeline.py          # Main inference pipeline
@@ -161,7 +162,8 @@ dualmodel/
 │   └── interrupter_model.pt
 ├── tray.py              # System tray (macOS/Windows)
 ├── app.py               # Gradio Web UI (legacy)
-└── demo.py              # CLI demo (legacy)
+├── demo.py              # CLI demo (legacy)
+└── ../tests/            # unittest suites (routing, config)
 ```
 
 ---
@@ -205,6 +207,36 @@ python -m dualmodel.train.train_interrupter
 Trained models are saved to `dualmodel/trained_models/` and loaded automatically on startup.
 
 ---
+
+## Development and tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The suite covers `routing.py` and `config.py`, which are deliberately free of
+torch/transformers: they decide every routing call and parse every environment
+variable, and they used to be untestable only because `gate.py` imports torch at
+module scope. The routing rules now live in their own module, and
+`dualmodel/__init__.py` resolves the heavy names lazily, so:
+
+```python
+from dualmodel.config import DualModelConfig   # standard library only
+import dualmodel                                # cheap; Gate loads on first access
+```
+
+CI runs the same command on Python 3.10 and 3.12 with **no dependencies
+installed**, which is what keeps that promise honest.
+
+### Model weights
+
+`trained_models/gate_model.pt` is ~87 MB. `.gitignore` used to list `*.pth` but
+not `*.pt`, which is how it was committed; the pattern is fixed now, so a
+retrained checkpoint will not be added by accident. Existing history still
+carries the file — cloning the repository means downloading it.
+
+Keeping a checkpoint out of a new commit is not the same as removing it from the
+past; that needs a history rewrite, which has not been done.
 
 ## License
 

@@ -9,6 +9,15 @@ import os
 from dataclasses import dataclass, field
 
 
+# `local_model_size` 到 HuggingFace 模型名的映射。__post_init__ 和 from_env
+# 都需要它（from_env 里环境变量可能在构造之后才生效），所以只定义一次。
+MODEL_SIZE_MAP = {
+    "0.5B": "Qwen/Qwen2.5-0.5B-Instruct",
+    "1.5B": "Qwen/Qwen2.5-1.5B-Instruct",
+    "7B": "Qwen/Qwen2.5-7B-Instruct",
+}
+
+
 @dataclass
 class DualModelConfig:
     """DualModel 全局配置。
@@ -121,13 +130,8 @@ class DualModelConfig:
             self.cloud_api_key = os.environ.get("DEEPSEEK_API_KEY", "")
 
         # 根据 local_model_size 自动选择模型
-        size_map = {
-            "0.5B": "Qwen/Qwen2.5-0.5B-Instruct",
-            "1.5B": "Qwen/Qwen2.5-1.5B-Instruct",
-            "7B": "Qwen/Qwen2.5-7B-Instruct",
-        }
-        if self.local_model_size in size_map:
-            self.local_model_name = size_map[self.local_model_size]
+        if self.local_model_size in MODEL_SIZE_MAP:
+            self.local_model_name = MODEL_SIZE_MAP[self.local_model_size]
 
     @classmethod
     def from_env(cls) -> "DualModelConfig":
@@ -197,13 +201,8 @@ class DualModelConfig:
                     logging.warning(f"环境变量 {env_key}={value} 解析失败: {e}")
 
         # 重新映射模型名称（__post_init__ 在 cls() 中已执行，但当时环境变量未生效）
-        size_map = {
-            "0.5B": "Qwen/Qwen2.5-0.5B-Instruct",
-            "1.5B": "Qwen/Qwen2.5-1.5B-Instruct",
-            "7B": "Qwen/Qwen2.5-7B-Instruct",
-        }
-        if config.local_model_size in size_map:
-            config.local_model_name = size_map[config.local_model_size]
+        if config.local_model_size in MODEL_SIZE_MAP:
+            config.local_model_name = MODEL_SIZE_MAP[config.local_model_size]
 
         return config
 

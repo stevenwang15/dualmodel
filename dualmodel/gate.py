@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 import torch
 
 from .config import DualModelConfig
+from .routing import classify_by_rules
 
 logger = logging.getLogger(__name__)
 
@@ -185,95 +186,12 @@ class Gate:
         return new_model
 
     def _classify_by_rules(self, question: str) -> dict:
-        """基于问题内容的路由分类（fallback，无训练模型时使用）。
+        """基于规则的路由决策。
 
-        根据问题内容判断复杂度，自然路由：
-        - 简单日常 → 本地（约 30%）
-        - 复杂专业 → 云端（约 70%）
-
-        Args:
-            question: 用户输入的问题文本。
-
-        Returns:
-            路由决策字典。
+        实现已移到 `routing.classify_by_rules`——那个模块不导入 torch，
+        因此这段逻辑可以被单元测试覆盖，而 `gate.py` 仍然保持自己的公共 API。
         """
-        q = question.strip()
-        q_lower = q.lower()
-
-        if not q:
-            return {
-                "model": "local",
-                "confidence": 0.5,
-                "reason": "空问题，默认使用本地模型",
-            }
-
-        # 1. 检查本地关键词（问候/日常 → 本地）
-        local_matches = [kw for kw in self.LOCAL_KEYWORDS if kw.lower() in q_lower]
-        if local_matches:
-            return {
-                "model": "local",
-                "confidence": 0.65 + min(len(local_matches) * 0.05, 0.25),
-                "reason": f"匹配本地关键词: {', '.join(local_matches[:3])}",
-            }
-
-        # 2. 检测代码特征（代码 → 云端）
-        code_patterns = [
-            r'def\s+\w+\s*\(', r'class\s+\w+', r'import\s+\w+',
-            r'function\s+\w+', r'const\s+\w+\s*=', r'let\s+\w+\s*=',
-        ]
-        for pat in code_patterns:
-            if re.search(pat, q):
-                return {"model": "cloud", "confidence": 0.7, "reason": f"检测到代码特征: {pat}"}
-
-        # 3. 检测数学表达式（数学 → 云端）
-        math_patterns = [r'\d+\s*[\+\-\*/]\s*\d+', r'\d+\s*=\s*\d+']
-        for pat in math_patterns:
-            if re.search(pat, q):
-                return {"model": "cloud", "confidence": 0.7, "reason": f"检测到数学表达式: {pat}"}
-
-        # 4. 计算问题复杂度评分
-        complexity = 0.0
-        reasons = []
-
-        # 4a. 长度评分：越长越复杂
-        if len(q) > 120:
-            complexity += 0.35
-            reasons.append(f"长文本({len(q)}字)")
-        elif len(q) > 50:
-            complexity += 0.20
-            reasons.append(f"中等长度({len(q)}字)")
-        elif len(q) <= 5:
-            complexity -= 0.15  # 极短问题倾向本地
-            reasons.append("极短问题")
-
-        # 4b. 云端关键词评分
-        cloud_matches = [kw for kw in self.CLOUD_KEYWORDS if kw.lower() in q_lower]
-        if cloud_matches:
-            score = min(len(cloud_matches) * 0.12, 0.45)
-            complexity += score
-            reasons.append(f"云端关键词+{score:.0%}")
-
-        # 4c. 疑问词/复杂句式
-        if re.search(r'(为什么|如何|怎样|怎么|是什么|什么是|请.*解释)', q):
-            complexity += 0.15
-            reasons.append("疑问/解释句式")
-        if "请" in q or "帮我" in q:
-            complexity += 0.10
-            reasons.append("请求帮助")
-
-        # 5. 决策：复杂度 ≥ 0.35 走云端，否则走本地
-        if complexity >= 0.35:
-            return {
-                "model": "cloud",
-                "confidence": min(0.55 + complexity, 0.95),
-                "reason": f"复杂度 {complexity:.2f}，路由云端 ({'; '.join(reasons)})",
-            }
-
-        return {
-            "model": "local",
-            "confidence": max(0.50, 0.55 - complexity),
-            "reason": f"复杂度 {complexity:.2f}，路由本地 ({'; '.join(reasons) if reasons else '默认'})",
-        }
+        return classify_by_rules(question, self.LOCAL_KEYWORDS, self.CLOUD_KEYWORDS)
 
     def _classify_by_embedding(self, question: str) -> dict:
         """基于 embedding 语义相似度的路由分类。"""
