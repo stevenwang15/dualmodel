@@ -452,8 +452,31 @@ def _cache_dir(repo_id: str) -> str:
     return path
 
 
+def _model_size_from_repo(repo_id: str) -> Optional[str]:
+    """从 repo id（如 Qwen/Qwen2.5-0.5B-Instruct）解析出规格（0.5B）。"""
+    match = re.search(r"Qwen2\.5-(.+)-Instruct$", repo_id)
+    return match.group(1) if match else None
+
+
+def _local_dir_has_weights(model_size: str) -> bool:
+    """检查 ~/.dualmodel/models/<size> 下是否有已下载的权重文件。"""
+    local_dir = _local_model_path(model_size)
+    if not os.path.isdir(local_dir):
+        return False
+    for fname in os.listdir(local_dir):
+        fpath = os.path.join(local_dir, fname)
+        if (fname.endswith(".safetensors") or fname.endswith(".bin")) \
+           and os.path.isfile(fpath) and os.path.getsize(fpath) > 1024 * 1024:
+            return True
+    return False
+
+
 def _is_model_cached(repo_id: str) -> bool:
-    """检查模型是否已缓存到本地磁盘。"""
+    """检查指定模型是否已缓存到本地磁盘。
+
+    只看该 repo 自己的缓存目录和对应规格的本地目录。之前这里遍历了
+    所有规格，下载了 7B 也会把 0.5B 报告成「已下载」。
+    """
     # 检查 ModelScope 缓存
     cachedir = _cache_dir(repo_id)
     if os.path.isdir(cachedir):
@@ -463,19 +486,12 @@ def _is_model_cached(repo_id: str) -> bool:
                and os.path.isfile(fpath) and os.path.getsize(fpath) > 1024 * 1024:
                 return True
     # 检查本地模型目录（MIRROR_URL 下载的）
-    for size in ["0.5B", "1.5B", "7B"]:
-        local_dir = _local_model_path(size)
-        if os.path.isdir(local_dir):
-            for fname in os.listdir(local_dir):
-                fpath = os.path.join(local_dir, fname)
-                if (fname.endswith(".safetensors") or fname.endswith(".bin")) \
-                   and os.path.isfile(fpath) and os.path.getsize(fpath) > 1024 * 1024:
-                    return True
-    return False
+    size = _model_size_from_repo(repo_id)
+    return bool(size) and _local_dir_has_weights(size)
 
 
 def _delete_model_cache(repo_id: str) -> None:
-    """删除模型本地缓存。"""
+    """删除指定模型的本地缓存。"""
     # 删除 ModelScope 缓存
     cachedir = _cache_dir(repo_id)
     if os.path.isdir(cachedir):
@@ -490,8 +506,9 @@ def _delete_model_cache(repo_id: str) -> None:
         elif os.path.isdir(alt):
             import shutil as _shutil
             _shutil.rmtree(alt, ignore_errors=True)
-    # 删除本地模型目录
-    for size in ["0.5B", "1.5B", "7B"]:
+    # 删除本地模型目录（仅该规格，避免误删其它已下载模型）
+    size = _model_size_from_repo(repo_id)
+    if size:
         local_dir = _local_model_path(size)
         if os.path.isdir(local_dir):
             import shutil
@@ -824,12 +841,14 @@ def _get_best_local_model(pipeline: DualModelPipeline) -> Any:
     # API 模式：检查磁盘上是否有已下载的模型
     for size in ["0.5B", "1.5B", "7B"]:
         repo_id = f"Qwen/Qwen2.5-{size}-Instruct"
-        if _is_model_cached(repo_id):
+        # 镜像下载的模型在本地目录里，直接用目录加载，避免再从 HF 拉一遍
+        model_path = _local_model_path(size) if _local_dir_has_weights(size) else repo_id
+        if model_path != repo_id or _is_model_cached(repo_id):
             logger.info(f"检测到已缓存的模型 {size}，自动加载真实本地模型")
             pipeline._loading_local = True
             cfg = DualModelConfig()
             cfg.local_model_size = size
-            cfg.local_model_name = repo_id
+            cfg.local_model_name = model_path
             # 自动检测设备
             if torch.backends.mps.is_available():
                 cfg.local_device = "mps"
@@ -911,9 +930,13 @@ def _generate_cloud_direct(
         生成的文本片段。
     """
     cloud_model = pipeline.cloud_model
-    # 云端模型内部会处理 max_tokens，这里直接迭代
+    # 沿用它自己的 max_tokens 配置，但请求里显式给的上限优先
+    tokens_generated = 0
     for token_info in cloud_model.generate_token(question):
         yield token_info["token_str"]
+        tokens_generated += 1
+        if max_tokens is not None and tokens_generated >= max_tokens:
+            break
 
 
 def _is_metadata_chunk(chunk: str) -> bool:

@@ -85,7 +85,7 @@ class DualModelPipeline:
         question: str,
         stream: bool = False,
         max_tokens: Optional[int] = None,
-        history: Optional[List[str]] = None,
+        history: Optional[List[dict]] = None,
     ) -> Generator[str, None, None]:
         """生成回答（streaming 版本）。
 
@@ -174,9 +174,12 @@ class DualModelPipeline:
                 compressed = self._compress_context(question, full_generated_text)
                 if fallback_model == "local":
                     input_ids_fb = self.local_model.tokenize(compressed)
+                    # 云端模式启动时 eos_token_id 为 None（避免为取 EOS 而加载本地模型），
+                    # 这里本地模型已实例化，直接取它的 EOS。
                     yield from self._generate_local_stream(
                         question, fallback_model, input_ids_fb, token_stats,
-                        max(100, max_tokens // 2), eos_token_id, full_generated_text,
+                        max(100, max_tokens // 2),
+                        self.local_model.eos_token_id, full_generated_text,
                     )
                 else:
                     yield from self._generate_cloud_stream(
@@ -533,6 +536,8 @@ class DualModelPipeline:
                 )
             except Exception as fallback_e:
                 yield f"\n[错误] Fallback 到本地模型也失败了: {fallback_e}\n"
+            # 本地生成器已经输出过 [完成]，不再重复统计
+            return
 
         # 生成结束，输出统计信息
         stats_str = format_stats(token_stats)

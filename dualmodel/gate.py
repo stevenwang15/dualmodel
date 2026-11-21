@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 
@@ -82,8 +82,6 @@ class Gate:
 
     def _load_trained_model(self) -> None:
         """加载训练好的 Gate 模型。"""
-        if self._is_api_mode:
-            pass
         try:
             model_path = os.path.join(
                 os.path.dirname(__file__), "trained_models", "gate_model.pt"
@@ -141,12 +139,12 @@ class Gate:
         else:
             return self._classify_by_rules(question)
 
-    def contextual_classify(self, question: str, history: List[str]) -> dict:
+    def contextual_classify(self, question: str, history: List[Dict[str, Any]]) -> dict:
         """基于上下文感知的路由分类。
 
         Args:
             question: 当前用户问题。
-            history: 历史消息列表。
+            history: 历史消息列表，元素为含 model 字段的字典。
 
         Returns:
             路由决策字典。
@@ -155,8 +153,12 @@ class Gate:
         if result["confidence"] > 0.7:
             return result
 
-        local_count = sum(1 for h in history if h.get("model") == "local")
-        cloud_count = sum(1 for h in history if h.get("model") == "cloud")
+        local_count = sum(
+            1 for h in history if isinstance(h, dict) and h.get("model") == "local"
+        )
+        cloud_count = sum(
+            1 for h in history if isinstance(h, dict) and h.get("model") == "cloud"
+        )
 
         if local_count > cloud_count and result["model"] == "local":
             result["confidence"] = min(result["confidence"] + 0.1, 1.0)

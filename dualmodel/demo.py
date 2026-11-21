@@ -242,7 +242,7 @@ def run_interactive(
                     print_colored(f"📌 示例 {i}/{len(SAMPLE_QUESTIONS)}", "bold")
                     run_single_question(pipeline, q, stream, show_stats)
             elif cmd in ("gate", "g"):
-                test_gate_only(pipeline.gate, question=True)
+                test_gate_only(pipeline.gate)
             else:
                 print_colored(f"未知命令: /{cmd}，输入 /help 查看帮助", "yellow")
         else:
@@ -263,13 +263,13 @@ def print_help() -> None:
 📌 路由规则说明
   - 云端模型关键词: 数学、代码、推理、技术类
   - 本地模型关键词: 闲聊、问候、简单应答
-  - 长问题(>100字) → 云端
+  - 长问题(>120字) → 云端
   - 检测到代码/数学表达式 → 云端
   - 默认 → 本地
 
 🔧 Interrupter 监控规则
   - 置信度 < 0.3 触发切换
-  - 滑动窗口(3 token)平均熵 > 2.5 触发切换
+  - 滑动窗口(5 token)平均熵 > 2.5 触发切换
   - 最少 5 个 token 后才允许切换
   - 切换后有 10 个 token 的冷却期
     """

@@ -75,6 +75,23 @@ class RoutingTechnicalTests(unittest.TestCase):
         self.assertEqual(route("你好，今天天气不错呀")["model"], "local")
 
 
+class RoutingKeywordBoundaryTests(unittest.TestCase):
+    def test_an_ascii_greeting_matches_as_a_whole_word(self):
+        self.assertEqual(route("hi", ["hi"], [])["model"], "local")
+
+    def test_an_ascii_greeting_does_not_match_inside_another_word(self):
+        # "hi" 曾命中 "machine" 里的 hi，把技术问题误判给本地模型。
+        r = classify_by_rules(
+            "请解释 machine learning 的算法原理，并比较它和深度学习的区别",
+            ["hi", "hello"],
+            ["算法", "原理", "比较", "区别", "深度学习"],
+        )
+        self.assertEqual(r["model"], "cloud", r)
+
+    def test_chinese_keywords_still_match_as_substrings(self):
+        self.assertEqual(route("谢谢你的帮助")["model"], "local")
+
+
 class RoutingComplexityTests(unittest.TestCase):
     def test_long_text_goes_to_cloud(self):
         self.assertEqual(route("这个" * 70)["model"], "cloud")
@@ -163,6 +180,12 @@ class ConfigFromEnvTests(unittest.TestCase):
     def test_size_from_env_also_remaps_the_model_name(self):
         with mock.patch.dict(os.environ, {"LOCAL_MODEL_SIZE": "1.5B"}, clear=False):
             self.assertEqual(DualModelConfig.from_env().local_model_name, MODEL_SIZE_MAP["1.5B"])
+
+    def test_a_model_name_from_env_is_not_overwritten_by_the_default_size(self):
+        # 默认规格是 7B，之前 from_env 会把 LOCAL_MODEL_NAME 重新映射成 7B 的模型名。
+        env = {"LOCAL_MODEL_NAME": "custom/model"}
+        with mock.patch.dict(os.environ, env, clear=False):
+            self.assertEqual(DualModelConfig.from_env().local_model_name, "custom/model")
 
 
 if __name__ == "__main__":

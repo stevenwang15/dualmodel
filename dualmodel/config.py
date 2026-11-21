@@ -200,8 +200,12 @@ class DualModelConfig:
                     import logging
                     logging.warning(f"环境变量 {env_key}={value} 解析失败: {e}")
 
-        # 重新映射模型名称（__post_init__ 在 cls() 中已执行，但当时环境变量未生效）
-        if config.local_model_size in MODEL_SIZE_MAP:
+        # 重新映射模型名称（__post_init__ 在 cls() 中已执行，但当时环境变量未生效）。
+        # 显式设置的 LOCAL_MODEL_NAME 优先，否则会被默认的 7B 映射覆盖而失效。
+        if (
+            not os.environ.get("LOCAL_MODEL_NAME")
+            and config.local_model_size in MODEL_SIZE_MAP
+        ):
             config.local_model_name = MODEL_SIZE_MAP[config.local_model_size]
 
         return config

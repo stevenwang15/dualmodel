@@ -30,6 +30,20 @@ _MATH_PATTERNS = [
 _EXPLANATION_PATTERN = r"(为什么|如何|怎样|怎么|是什么|什么是|请.*解释)"
 
 
+def _keyword_matches(keyword: str, question_lower: str) -> bool:
+    """Return whether `keyword` occurs in the question.
+
+    Chinese keywords are matched as substrings, but ASCII ones must stand on
+    their own: "hi" used to match inside "machine" and "this", which sent
+    technical questions to the small local model.
+    """
+    kw = keyword.lower()
+    if kw.isascii() and any(ch.isalnum() for ch in kw):
+        pattern = rf"(?<![a-z0-9]){re.escape(kw)}(?![a-z0-9])"
+        return re.search(pattern, question_lower) is not None
+    return kw in question_lower
+
+
 def classify_by_rules(
     question: str, local_keywords: List[str], cloud_keywords: List[str]
 ) -> Dict[str, object]:
@@ -64,7 +78,7 @@ def classify_by_rules(
         if re.search(pat, q):
             return {"model": "cloud", "confidence": 0.7, "reason": f"检测到数学表达式: {pat}"}
 
-    local_matches = [kw for kw in local_keywords if kw.lower() in q_lower]
+    local_matches = [kw for kw in local_keywords if _keyword_matches(kw, q_lower)]
     if local_matches:
         return {
             "model": "local",
@@ -85,7 +99,7 @@ def classify_by_rules(
         complexity -= 0.15
         reasons.append("极短问题")
 
-    cloud_matches = [kw for kw in cloud_keywords if kw.lower() in q_lower]
+    cloud_matches = [kw for kw in cloud_keywords if _keyword_matches(kw, q_lower)]
     if cloud_matches:
         score = min(len(cloud_matches) * 0.12, 0.45)
         complexity += score

@@ -264,7 +264,7 @@ class Interrupter:
             logger.warning(f"Interrupter 触发: {result['reason']}")
             return result
 
-        # 检查 5：滑动窗口内平均熵超过阈值
+        # 检查 6：滑动窗口内平均熵超过阈值
         window_entropies = token_stats["entropies"][-self.window_size:]
         avg_window_entropy = sum(window_entropies) / len(window_entropies)
 

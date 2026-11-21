@@ -54,8 +54,9 @@ def _run_tray(port: int, host: str, model: str) -> None:
 
     from dualmodel.tray import main as tray_main
 
-    # 托盘会自动启动服务器子进程
-    tray_main()
+    # 托盘会自动启动服务器子进程。run_app 自己的 --model/--host 已经通过环境变量
+    # 传下去，这里只转交端口，避免托盘再次解析到它不认识的参数。
+    tray_main(["--port", str(port)])
 
 
 def _install_launchd(port: int, model: str) -> None:

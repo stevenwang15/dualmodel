@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 import webbrowser
+from typing import List, Optional
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_THIS_DIR)
@@ -37,8 +38,13 @@ def _start_server(port: int) -> str:
         return "已在运行"
     _server_port = port
     env = os.environ.copy()
+    if getattr(sys, "frozen", False):
+        # PyInstaller 打包后 sys.executable 是应用本身，`-m` 无法再启动子模块
+        cmd = [sys.executable, "--server-only", "--port", str(port)]
+    else:
+        cmd = [sys.executable, "-m", "dualmodel.api_server", "--port", str(port)]
     _server_process = subprocess.Popen(
-        [sys.executable, "-m", "dualmodel.api_server", "--port", str(port)],
+        cmd,
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -267,13 +273,13 @@ def run_windows() -> None:
 
 # ── 入口 ──────────────────────────────────────────────────────
 
-def main() -> None:
+def main(argv: Optional[List[str]] = None) -> None:
     """托盘入口，根据平台选择实现。"""
     global _server_port
     parser = argparse.ArgumentParser(description="DualModel 系统托盘")
     parser.add_argument("--port", type=int, default=8765, help="API 服务端口")
     parser.add_argument("--no-tray", action="store_true", help="不启动托盘，仅启动服务")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     _server_port = args.port
 
     if args.no_tray:
